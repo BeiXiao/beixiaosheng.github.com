@@ -2,7 +2,7 @@ require "rubygems"
 require 'rake'
 require 'yaml'
 require 'time'
-
+require 'hz2py'
 SOURCE = "."
 CONFIG = {
   'version' => "0.3.0",
@@ -45,27 +45,39 @@ desc "Begin a new post in #{CONFIG['posts']}"
 task :post do
   abort("rake aborted: '#{CONFIG['posts']}' directory not found.") unless FileTest.directory?(CONFIG['posts'])
   title = ENV["title"] || "new-post"
+  # 新增用来接收category和description参数
+  category = ENV["category"] || "default"
+  description = ENV["description"] || ""
   tags = ENV["tags"] || "[]"
-  slug = title.downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')
+  # 新增用来将汉子转换成拼音
+  slug = Hz2py.do(title.encode('utf-8'), :jion_with => '-', :to_simplified => true)
+  slug = slug.downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')
   begin
     date = (ENV['date'] ? Time.parse(ENV['date']) : Time.now).strftime('%Y-%m-%d')
   rescue => e
     puts "Error - date format must be YYYY-MM-DD, please check you typed it correctly!"
     exit -1
   end
-  filename = File.join(CONFIG['posts'], "#{date}-#{slug}.#{CONFIG['post_ext']}")
+  # 新增创建分类目录
+  filename = File.join(CONFIG['posts'], category)
+  if !File.directory?(filename)
+    mkdir_p filename
+  end 
+  filename = File.join(filename, "#{date}-#{slug}.#{CONFIG['post_ext']}")
   if File.exist?(filename)
     abort("rake aborted!") if ask("#{filename} already exists. Do you want to overwrite?", ['y', 'n']) == 'n'
   end
-  
+  #新增用户提示，在创建博客之前最后再检查一次是否按照自己的需求正确创建
+  abort("rake aborted!") if ask("The post #{filename} will be created in category #{category}, are you sure?", ['y', 'n']) == 'n'
+
   puts "Creating new post: #{filename}"
   open(filename, 'w') do |post|
     post.puts "---"
     post.puts "layout: post"
     post.puts "title: \"#{title.gsub(/-/,' ')}\""
-    post.puts 'description: ""'
-    post.puts "category: "
-    post.puts "tags: []"
+    post.puts "description: \"#{description}\""
+    post.puts "category: \"#{category}\""
+    post.puts "tags: \"#{tags}\""
     post.puts "---"
     post.puts "{% include JB/setup %}"
   end
